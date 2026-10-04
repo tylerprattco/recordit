@@ -27,7 +27,7 @@ import threading
 import time
 from pathlib import Path
 
-from .common import LOG_FILE, SOCK_PATH, STATE_DIR
+from .common import HOST, LOG_FILE, PORT_FILE, STATE_DIR
 
 DAEMON_SPAWN_TIMEOUT = 20  # seconds to wait for a freshly spawned daemon to open the device
 QUICK_CONNECT_TIMEOUT = 0.3  # seconds to detect whether a daemon is already running
@@ -48,10 +48,14 @@ def _request(sock, payload, recv_timeout):
 
 
 def _try_connect(timeout):
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    try:
+        port = int(PORT_FILE.read_text().strip())
+    except (FileNotFoundError, ValueError):
+        return None
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
-        sock.connect(str(SOCK_PATH))
+        sock.connect((HOST, port))
     except OSError:
         sock.close()
         return None
@@ -61,8 +65,13 @@ def _try_connect(timeout):
 def _spawn_daemon():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     cmd = [sys.executable, "-m", "recordit.daemon"]
+    popen_kwargs = {}
+    if sys.platform == "win32":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
+    else:
+        popen_kwargs["start_new_session"] = True
     with open(LOG_FILE, "a") as log:
-        subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, **popen_kwargs)
 
 
 def _connect_spawning_if_needed():

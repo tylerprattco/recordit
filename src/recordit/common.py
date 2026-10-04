@@ -1,8 +1,13 @@
 from pathlib import Path
 
 STATE_DIR = Path.home() / ".recordit"
-SOCK_PATH = STATE_DIR / "recordit.sock"
 LOG_FILE = STATE_DIR / "recordit.log"
+
+# The daemon listens on a loopback TCP port (rather than a Unix domain
+# socket) so the same code works on Windows as well as macOS/Linux. It picks
+# an ephemeral free port at startup and records it here for clients to find.
+PORT_FILE = STATE_DIR / "recordit.port"
+HOST = "127.0.0.1"
 
 SAMPLE_RATE = 44100
 SUBTYPE = "PCM_16"

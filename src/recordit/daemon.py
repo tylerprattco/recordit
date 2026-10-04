@@ -30,11 +30,12 @@ import soundfile as sf
 from .common import (
     BLOCKSIZE,
     DTYPE,
+    HOST,
     IDLE_TIMEOUT,
     MONITOR_BLOCKSIZE,
     MONITOR_LATENCY,
+    PORT_FILE,
     SAMPLE_RATE,
-    SOCK_PATH,
     STATE_DIR,
     SUBTYPE,
 )
@@ -337,17 +338,22 @@ def _handle_client(conn, recorder):
 def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
-    if SOCK_PATH.exists():
-        probe = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        probe.settimeout(0.3)
+    if PORT_FILE.exists():
         try:
-            probe.connect(str(SOCK_PATH))
-            probe.close()
-            sys.stderr.write("recordit daemon is already running\n")
-            sys.exit(1)
-        except OSError:
-            probe.close()
-            SOCK_PATH.unlink()  # stale socket from a crashed daemon
+            stale_port = int(PORT_FILE.read_text().strip())
+        except ValueError:
+            stale_port = None
+        if stale_port is not None:
+            probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            probe.settimeout(0.3)
+            try:
+                probe.connect((HOST, stale_port))
+                probe.close()
+                sys.stderr.write("recordit daemon is already running\n")
+                sys.exit(1)
+            except OSError:
+                probe.close()
+        PORT_FILE.unlink()  # stale port file from a crashed daemon
 
     recorder = Recorder()
     try:
@@ -356,9 +362,10 @@ def main():
         sys.stderr.write(f"No default input device available: {exc}\n")
         sys.exit(1)
 
-    server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    server.bind(str(SOCK_PATH))
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server.bind((HOST, 0))
     server.listen(8)
+    PORT_FILE.write_text(str(server.getsockname()[1]))
 
     shutdown_event = threading.Event()
 
@@ -393,7 +400,7 @@ def main():
         recorder.stop()
     recorder.shutdown()
     try:
-        SOCK_PATH.unlink()
+        PORT_FILE.unlink()
     except FileNotFoundError:
         pass
 
