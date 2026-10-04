@@ -215,7 +215,17 @@ def do_record(filename, mode, device_name=None, monitor=False):
 
 
 def build_parser():
-    parser = argparse.ArgumentParser(prog="recordit", description="Record audio to a WAV file.")
+    parser = argparse.ArgumentParser(
+        prog="recordit",
+        description="Record audio to a WAV file.",
+        epilog=(
+            "While recording:\n"
+            f"  {STOP_WORD}     stop and save\n"
+            f"  {DELETE_WORD}   stop and discard the file\n"
+            "  Ctrl+C / Ctrl+D   also stop and save\n"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("name", nargs="?", help="output filename; recording starts immediately")
     parser.add_argument(
         "--output",
