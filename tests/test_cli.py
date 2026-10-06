@@ -114,6 +114,7 @@ def test_parse_input_waits_for_rest_of_sequence(partial):
         ([b"s"], "stop"),
         ([b"S"], "stop"),
         ([b"x"], "delete"),
+        ([b"X"], "delete"),  # Shift+X
         ([b"\x04"], "stop"),  # Ctrl+D
         ([], "stop"),  # stdin closed
         ([click(STOP_COL)], "stop"),

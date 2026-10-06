@@ -69,8 +69,8 @@ and scrolling waveform show, with clickable controls underneath:
 | Click / key          | Effect                                     |
 |----------------------|--------------------------------------------|
 | `⏸` / space or `p`   | Pause (becomes `▶`; click again to resume) |
-| `⏹` / `s`            | Stop and save                              |
-| `✕` / `x`            | Stop and discard the file                  |
+| `⏹` / `s` or Shift+S | Stop and save                              |
+| `✕` / `x` or Shift+X | Stop and discard the file                  |
 | Ctrl+C               | Stop and save                              |
 
 Paused time isn't recorded, and the timer and waveform freeze while paused
