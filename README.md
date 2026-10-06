@@ -21,11 +21,17 @@ instead of paying audio device setup costs every time.
 ## Install
 
 ```
+git clone https://github.com/tylerprattco/recordit.git
+cd recordit
 pip install -e .
 ```
 
-This installs the `recordit` command (via `sounddevice` and `soundfile`,
-which bundle PortAudio/libsndfile — no separate system install needed).
+This installs the `recordit` command. Its audio libraries (`sounddevice` and
+`soundfile`) bundle PortAudio and libsndfile on macOS and Windows, so
+there's nothing else to install there. On Linux, install PortAudio from your
+package manager first, e.g. `sudo apt install libportaudio2`.
+
+To update later, run `git pull` in the same folder.
 
 ## Usage
 
@@ -125,15 +131,37 @@ separate, or set up a Multi-Output Device that includes real speakers.
 recordit --help
 ```
 
-Lists all flags plus the in-session `stop`/`delete` controls.
+Lists all flags plus the in-session recording controls.
 
 ## Notes
 
-- Files are saved into whichever directory you ran `recordit` from, even if
-  you later run `stop`/`delete` from a different shell.
+- Files are saved into whichever directory you ran `recordit` from.
 - The background daemon auto-shuts-down after 30 minutes of inactivity,
   releasing the audio device.
-- Windows support (TCP-loopback IPC, detached process spawn, console
-  modes for the live controls) has been written to be cross-platform but
-  not yet tested on an actual Windows machine — if you hit issues there,
-  please report them.
+- The daemon only accepts commands carrying a random token it generates at
+  startup and stores in `~/.recordit/recordit.port`, readable only by your
+  user account, so other users' programs on the same machine can't control
+  it.
+- Windows support has had light testing so far; if you hit issues there,
+  please open an issue.
+
+## Contributing
+
+recordit is a personal project, maintained on a best-effort basis. Bug
+reports and pull requests are welcome; for anything bigger than a small
+fix, please open an issue first to talk it through.
+
+To run the tests:
+
+```
+pip install -e ".[test]"
+pytest
+```
+
+They also run automatically on macOS, Windows and Linux for every pull
+request. The tests don't need a microphone; they feed synthetic audio
+straight to the recorder.
+
+## License
+
+[MIT](LICENSE)
