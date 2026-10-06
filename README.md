@@ -34,22 +34,31 @@ recordit take1
 ```
 
 Starts recording immediately from your default input device, saving to
-`take1.wav` in your current directory. While it's recording:
-
-| Type              | Effect                          |
-|-------------------|----------------------------------|
-| `stop` + Enter    | Stop and save                   |
-| `delete` + Enter  | Stop and discard the file       |
-| Ctrl+C / Ctrl+D   | Stop and save                   |
-
-A live timer and scrolling waveform show while it's running, one column
-per 0.1s of audio, scaled from -60 dBFS (lowest bar) to full scale:
+`take1.wav` in your current directory. While it's recording, a live timer
+and scrolling waveform show, with clickable controls underneath:
 
 ```
 ● recording  01:23  ▁▂▅▇█▆▃▂▁▁▂▄▆▇▅▃▂▁▂▃▅▇▆▄▂▁
+  [ ⏸ ]   [ ⏹ ]   [ ✕ ]
 ```
 
-The last waveform stays on screen after you stop.
+| Click / key          | Effect                                     |
+|----------------------|--------------------------------------------|
+| `⏸` / space or `p`   | Pause (becomes `▶`; click again to resume) |
+| `⏹` / `s`            | Stop and save                              |
+| `✕` / `x`            | Stop and discard the file                  |
+| Ctrl+C               | Stop and save                              |
+
+Paused time isn't recorded, and the timer and waveform freeze while paused
+(with `--monitor`, you still hear the source). The waveform has one column
+per 0.1s of audio, scaled from -60 dBFS (lowest bar) to full scale, and the
+last one stays on screen after you stop.
+
+Clicking uses your terminal's mouse reporting (supported by macOS Terminal,
+iTerm2 and most Linux terminals). While recording, the terminal sends clicks
+to recordit, so to select text hold Option (macOS) or Shift (most Linux
+terminals) while dragging. Where clicks can't be read (e.g. on Windows),
+type `stop` or `delete` and press Enter instead.
 
 ### Recording system audio instead of the mic
 

@@ -70,15 +70,17 @@ class Recorder:
 
     def input_callback(self, indata, frames, time_info, status):
         session = self.session
-        if session is not None and session["mode"] == "input":
+        if session is not None and session["mode"] == "input" and not session["paused"]:
             session["queue"].put(indata.copy())
             self._record_level(session, indata)
 
     def secondary_callback(self, indata, frames, time_info, status):
         session = self.session
         if session is not None and session["mode"] in ("output", "device"):
-            session["queue"].put(indata.copy())
-            self._record_level(session, indata)
+            # Monitoring continues while paused; only the recording stops.
+            if not session["paused"]:
+                session["queue"].put(indata.copy())
+                self._record_level(session, indata)
             monitor_queue = session.get("monitor_queue")
             if monitor_queue is not None:
                 monitor_queue.put(indata[:, : self.monitor_channels].copy())
@@ -253,6 +255,7 @@ class Recorder:
 
             q = queue.Queue()
             stop_event = threading.Event()
+            frames_written = [0]
 
             def writer():
                 while True:
@@ -263,6 +266,7 @@ class Recorder:
                             return
                         continue
                     sound_file.write(chunk)
+                    frames_written[0] += len(chunk)
 
             thread = threading.Thread(target=writer, daemon=True)
             thread.start()
@@ -294,11 +298,12 @@ class Recorder:
                 "stop_event": stop_event,
                 "thread": thread,
                 "filename": filename,
-                "start_time": time.time(),
                 "mode": mode,
                 "monitor_queue": monitor_queue,
                 "monitor_thread": monitor_thread,
                 "levels": deque(maxlen=1000),
+                "paused": False,
+                "frames_written": frames_written,
             }
             self.last_activity = time.time()
             return True, None
@@ -316,8 +321,17 @@ class Recorder:
         if session["monitor_thread"] is not None:
             session["monitor_thread"].join(timeout=5)
         self.last_activity = time.time()
-        duration = time.time() - session["start_time"]
+        # Measured from the audio written rather than wall-clock time, so
+        # paused stretches aren't counted.
+        duration = session["frames_written"][0] / SAMPLE_RATE
         return (session["filename"], duration), None
+
+    def set_paused(self, paused):
+        with self.lock:
+            if self.session is None:
+                return "Not recording"
+            self.session["paused"] = paused
+            return None
 
     def is_idle(self):
         return self.session is None
@@ -352,6 +366,9 @@ def _handle_client(conn, recorder):
             else:
                 filename, duration = result
                 conn.sendall(json.dumps({"ok": True, "filename": filename, "duration": duration}).encode())
+        elif cmd in ("pause", "resume"):
+            err = recorder.set_paused(cmd == "pause")
+            conn.sendall(json.dumps({"ok": err is None, "error": err}).encode())
         elif cmd == "levels":
             levels = recorder.drain_levels()
             if levels is None:
