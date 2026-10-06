@@ -1,5 +1,5 @@
 """Background daemon that keeps the default input device open and idling,
-and opens a secondary stream on demand for -output or -device recordings.
+and opens a secondary stream on demand for --output or --device recordings.
 
 Keeping the input stream open across recordings avoids paying the slow
 device/permission negotiation cost on every `recordit` invocation. The
@@ -11,7 +11,7 @@ Devices (and the default output) can change while the daemon is running
 only enumerates devices once per process at startup -- querying it again
 from within this same long-running process returns the same stale answer,
 and spawning a fresh helper process to re-query hangs in some environments
-(nested audio-subprocess spawning is unreliable). So each -output/-device
+(nested audio-subprocess spawning is unreliable). So each --output/--device
 request instead reinitializes PortAudio in-process (forcing a fresh device
 scan) right here in the daemon, then reopens both streams.
 """
@@ -64,13 +64,13 @@ class Recorder:
         self.input_channels = 0
 
         # Holds whichever non-default device a recording currently targets:
-        # the default-output loopback device for -output, or a specific
-        # device by name for -device.
+        # the default-output loopback device for --output, or a specific
+        # device by name for --device.
         self.secondary_stream = None
         self.secondary_channels = 0
 
         # Live playback of the captured audio to the system's current
-        # output device, for -monitor.
+        # output device, for --monitor.
         self.monitor_stream = None
         self.monitor_channels = 0
 
@@ -235,7 +235,7 @@ class Recorder:
                 "Can't monitor to the same device you're recording from -- the system's "
                 "current output device is the loopback device itself, so playing back to "
                 "it would feed straight back into the recording. Pick a different device "
-                "with -device, or set up a Multi-Output Device that also includes real "
+                "with --device, or set up a Multi-Output Device that also includes real "
                 "speakers/headphones."
             )
 
@@ -271,7 +271,7 @@ class Recorder:
                     return False, err
             else:
                 if monitor:
-                    return False, "-monitor only applies to -output or -device recordings."
+                    return False, "--monitor only applies to --output or --device recordings."
                 channels = self.input_channels
 
             try:

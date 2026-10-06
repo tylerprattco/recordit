@@ -14,7 +14,7 @@ instead of paying audio device setup costs every time.
 
 - Python 3.8+
 - macOS, Linux, or Windows
-- For `-output`/`-device` with a non-input device: a loopback-capable
+- For `--output`/`--device` with a non-input device: a loopback-capable
   virtual audio device, e.g. [BlackHole](https://github.com/ExistentialAudio/BlackHole)
   on macOS.
 
@@ -43,7 +43,7 @@ Starts recording immediately from your default input device, saving to
 `take1.wav` in your current directory. Leave out the name (just `recordit`)
 and it's named after the time it started, e.g.
 `recordit 2026-10-06 at 12.28.02 PM.wav`; this works with the flags below
-too (`recordit -output`).
+too (`recordit --output`).
 
 To get an MP3 instead, end the name in `.mp3`:
 
@@ -74,7 +74,7 @@ and scrolling waveform show, with clickable controls underneath:
 | Ctrl+C               | Stop and save                              |
 
 Paused time isn't recorded, and the timer and waveform freeze while paused
-(with `-monitor`, you still hear the source). The waveform has one column
+(with `--monitor`, you still hear the source). The waveform has one column
 per 0.1s of audio, scaled linearly by peak amplitude like a DAW waveform, and the
 last one stays on screen after you stop.
 
@@ -88,7 +88,7 @@ buttons still show and the keyboard shortcuts work, but clicks do nothing.
 ### Recording system audio instead of the mic
 
 ```
-recordit take1 -output
+recordit take1 --output
 ```
 
 Records whatever is currently going to your system's default output device,
@@ -99,7 +99,7 @@ output has no input side and can't be captured this way.
 ### Picking a specific device
 
 ```
-recordit take1 -device
+recordit take1 --device
 ```
 
 Lists all input and output devices, numbered, and prompts you to pick one:
@@ -123,35 +123,49 @@ default is set to.
 ### Monitoring while recording a loopback device
 
 ```
-recordit take1 -output -monitor
-recordit take1 -device -monitor
+recordit take1 --output --monitor
+recordit take1 --device --monitor
 ```
 
 If you're recording from a loopback device (so you can't hear it directly —
-e.g. your system output is set straight to BlackHole), `-monitor` also
+e.g. your system output is set straight to BlackHole), `--monitor` also
 plays the captured audio live to your actual output hardware so you can
-listen while it records. Only valid combined with `-output` or `-device`.
+listen while it records. Only valid combined with `--output` or `--device`.
 
 If the device you'd monitor to turns out to be the exact same device you're
-recording from (e.g. `-output` with BlackHole as your only system output),
+recording from (e.g. `--output` with BlackHole as your only system output),
 `recordit` refuses rather than create a feedback loop — in that case, either
-use `-device` to record BlackHole explicitly while your real output stays
+use `--device` to record BlackHole explicitly while your real output stays
 separate, or set up a Multi-Output Device that includes real speakers.
 
 ### Showing the file when done
 
 ```
-recordit take1 -showfile
+recordit take1 --showfile
 ```
 
 Once the recording is saved, opens your default file browser on its folder
 (Finder selects the file on macOS, Explorer on Windows; elsewhere the folder
 is opened with `xdg-open`). Nothing opens if you discard the recording.
 
+### Short flags
+
+Each flag has a single-dash short form:
+
+| Flag         | Short |
+|--------------|-------|
+| `--output`   | `-o`  |
+| `--device`   | `-d`  |
+| `--monitor`  | `-m`  |
+| `--showfile` | `-s`  |
+
+For example, `recordit take1 -o -m` is the same as
+`recordit take1 --output --monitor`.
+
 ### Help
 
 ```
-recordit -help
+recordit --help
 ```
 
 Lists all flags plus the in-session recording controls.

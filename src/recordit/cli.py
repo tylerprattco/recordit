@@ -4,15 +4,18 @@ Usage:
     recordit                  # record to a timestamped file, e.g.
                                # "recordit 2026-10-06 at 12.28.02 PM.wav"
     recordit take1            # record from the default input device
-    recordit take1 -output   # record the system's current output instead
+    recordit take1 --output   # record the system's current output instead
                                # (requires a loopback-capable output device,
                                # e.g. BlackHole)
-    recordit take1 -device   # list input/output devices and pick one
-    recordit take1 -showfile # when saved, open the file browser to the
+    recordit take1 --device   # list input/output devices and pick one
+    recordit take1 --showfile # when saved, open the file browser to the
                                # recording's folder
-    recordit take1 -output -monitor   # also play the capture live to
+    recordit take1 --output --monitor   # also play the capture live to
                                # your speakers (needs a separate real
                                # output device from the one being captured)
+
+    Each flag also has a short form: -o, -d, -m, -s (--output, --device,
+    --monitor, --showfile).
 
     While recording, click the pause/stop/delete buttons under the
     waveform, or press space to pause/resume, s to stop and save, or x to
@@ -609,9 +612,7 @@ def build_parser():
             f"If input is piped rather than typed, use {STOP_WORD} or {DELETE_WORD} + Enter instead.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        add_help=False,
     )
-    parser.add_argument("-h", "-help", "--help", action="help", help="show this help message and exit")
     parser.add_argument(
         "name",
         nargs="?",
@@ -620,24 +621,28 @@ def build_parser():
         'stop (default: a timestamp, e.g. "recordit 2026-10-06 at 12.28.02 PM.wav")',
     )
     parser.add_argument(
-        "-output",
+        "-o",
+        "--output",
         action="store_true",
         help="record the system's current output instead of the input device "
         "(requires a loopback-capable output device, e.g. BlackHole)",
     )
     parser.add_argument(
-        "-device",
+        "-d",
+        "--device",
         action="store_true",
         help="list available input/output devices and choose one to record from",
     )
     parser.add_argument(
-        "-monitor",
+        "-m",
+        "--monitor",
         action="store_true",
         help="also play the captured audio live to the system's current output device "
-        "(only valid with -output or -device, e.g. to hear a BlackHole loopback capture)",
+        "(only valid with --output or --device, e.g. to hear a BlackHole loopback capture)",
     )
     parser.add_argument(
-        "-showfile",
+        "-s",
+        "--showfile",
         action="store_true",
         help="when the recording is saved, open the default file browser to the folder it's in",
     )
@@ -649,10 +654,10 @@ def main():
     args = parser.parse_args()
 
     if args.output and args.device:
-        sys.exit("Use either -output or -device, not both.")
+        sys.exit("Use either --output or --device, not both.")
 
     if args.monitor and not (args.output or args.device):
-        sys.exit("-monitor only applies to -output or -device recordings.")
+        sys.exit("--monitor only applies to --output or --device recordings.")
 
     if args.device:
         device_name = prompt_for_device()

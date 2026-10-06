@@ -205,5 +205,15 @@ def test_show_in_file_browser_reports_launch_failure(monkeypatch):
 
 
 def test_showfile_flag_parses():
-    assert cli.build_parser().parse_args(["-showfile"]).showfile is True
+    assert cli.build_parser().parse_args(["--showfile"]).showfile is True
     assert cli.build_parser().parse_args([]).showfile is False
+
+
+@pytest.mark.parametrize(
+    "short, long, dest",
+    [("-o", "--output", "output"), ("-d", "--device", "device"), ("-m", "--monitor", "monitor"), ("-s", "--showfile", "showfile")],
+)
+def test_short_flags_match_long_flags(short, long, dest):
+    parser = cli.build_parser()
+    assert getattr(parser.parse_args([short]), dest) is True
+    assert getattr(parser.parse_args([long]), dest) is True
