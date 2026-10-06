@@ -4,11 +4,13 @@ Usage:
     recordit                  # record to a timestamped file, e.g.
                                # "recordit 2026-10-06 at 12.28.02 PM.wav"
     recordit take1            # record from the default input device
-    recordit take1 --output   # record the system's current output instead
+    recordit take1 -output   # record the system's current output instead
                                # (requires a loopback-capable output device,
                                # e.g. BlackHole)
-    recordit take1 --device   # list input/output devices and pick one
-    recordit take1 --output --monitor   # also play the capture live to
+    recordit take1 -device   # list input/output devices and pick one
+    recordit take1 -showfile # when saved, open the file browser to the
+                               # recording's folder
+    recordit take1 -output -monitor   # also play the capture live to
                                # your speakers (needs a separate real
                                # output device from the one being captured)
 
@@ -106,6 +108,23 @@ def _keep_wav(wav_path, mp3_path):
         return wav_path
     wav_path.rename(visible)
     return visible
+
+
+def _show_in_file_browser(path):
+    """Open the default file browser on path's folder, selecting the file where
+    the platform supports it; return None on success, or an error message."""
+    if sys.platform == "darwin":
+        cmd = ["open", "-R", str(path)]
+    elif sys.platform == "win32":
+        cmd = ["explorer", f"/select,{path}"]
+    else:
+        cmd = ["xdg-open", str(path.parent)]
+    try:
+        # explorer exits nonzero even on success, so only launch failures count.
+        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=sys.platform != "win32")
+    except (OSError, subprocess.CalledProcessError) as exc:
+        return str(exc)
+    return None
 
 
 def _request(conn, payload, recv_timeout):
@@ -527,7 +546,7 @@ def _run_typed_controls(show_waveform):
         progress.join(timeout=2)
 
 
-def do_record(filename, mode, device_name=None, monitor=False):
+def do_record(filename, mode, device_name=None, monitor=False, show_file=False):
     if not filename:
         filename = _default_filename()
 
@@ -571,6 +590,10 @@ def do_record(filename, mode, device_name=None, monitor=False):
             sys.exit(f"MP3 conversion failed ({error}). The recording was kept as {kept}")
         record_path.unlink(missing_ok=True)
     print(f"Saved to {target} ({reply['duration']:.1f}s)")
+    if show_file:
+        error = _show_in_file_browser(target)
+        if error is not None:
+            print(f"Couldn't open the file browser: {error}", file=sys.stderr)
 
 
 def build_parser():
@@ -586,7 +609,9 @@ def build_parser():
             f"If input is piped rather than typed, use {STOP_WORD} or {DELETE_WORD} + Enter instead.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        add_help=False,
     )
+    parser.add_argument("-h", "-help", "--help", action="help", help="show this help message and exit")
     parser.add_argument(
         "name",
         nargs="?",
@@ -595,21 +620,26 @@ def build_parser():
         'stop (default: a timestamp, e.g. "recordit 2026-10-06 at 12.28.02 PM.wav")',
     )
     parser.add_argument(
-        "--output",
+        "-output",
         action="store_true",
         help="record the system's current output instead of the input device "
         "(requires a loopback-capable output device, e.g. BlackHole)",
     )
     parser.add_argument(
-        "--device",
+        "-device",
         action="store_true",
         help="list available input/output devices and choose one to record from",
     )
     parser.add_argument(
-        "--monitor",
+        "-monitor",
         action="store_true",
         help="also play the captured audio live to the system's current output device "
-        "(only valid with --output or --device, e.g. to hear a BlackHole loopback capture)",
+        "(only valid with -output or -device, e.g. to hear a BlackHole loopback capture)",
+    )
+    parser.add_argument(
+        "-showfile",
+        action="store_true",
+        help="when the recording is saved, open the default file browser to the folder it's in",
     )
     return parser
 
@@ -619,16 +649,16 @@ def main():
     args = parser.parse_args()
 
     if args.output and args.device:
-        sys.exit("Use either --output or --device, not both.")
+        sys.exit("Use either -output or -device, not both.")
 
     if args.monitor and not (args.output or args.device):
-        sys.exit("--monitor only applies to --output or --device recordings.")
+        sys.exit("-monitor only applies to -output or -device recordings.")
 
     if args.device:
         device_name = prompt_for_device()
-        do_record(args.name, "device", device_name, args.monitor)
+        do_record(args.name, "device", device_name, args.monitor, args.showfile)
     else:
-        do_record(args.name, "output" if args.output else "input", monitor=args.monitor)
+        do_record(args.name, "output" if args.output else "input", monitor=args.monitor, show_file=args.showfile)
 
 
 if __name__ == "__main__":

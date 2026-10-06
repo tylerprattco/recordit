@@ -174,3 +174,36 @@ def test_timer_freezes_while_paused(panel, monkeypatch):
     panel.set_paused(False)
     clock[0] = 112.0
     assert panel.elapsed() == 5.0
+
+
+@pytest.mark.parametrize(
+    "platform, expected",
+    [
+        ("darwin", ["open", "-R", "/rec/take1.wav"]),
+        ("win32", ["explorer", "/select,/rec/take1.wav"]),
+        ("linux", ["xdg-open", "/rec"]),
+    ],
+)
+def test_show_in_file_browser(monkeypatch, platform, expected):
+    from pathlib import PurePosixPath
+
+    calls = []
+    monkeypatch.setattr(cli.sys, "platform", platform)
+    monkeypatch.setattr(cli.subprocess, "run", lambda cmd, **kwargs: calls.append(cmd))
+    assert cli._show_in_file_browser(PurePosixPath("/rec/take1.wav")) is None
+    assert calls == [expected]
+
+
+def test_show_in_file_browser_reports_launch_failure(monkeypatch):
+    from pathlib import Path
+
+    def fail(cmd, **kwargs):
+        raise FileNotFoundError("no such program")
+
+    monkeypatch.setattr(cli.subprocess, "run", fail)
+    assert "no such program" in cli._show_in_file_browser(Path("/rec/take1.wav"))
+
+
+def test_showfile_flag_parses():
+    assert cli.build_parser().parse_args(["-showfile"]).showfile is True
+    assert cli.build_parser().parse_args([]).showfile is False

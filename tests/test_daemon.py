@@ -46,7 +46,7 @@ def start(recorder, path):
     assert ok, err
 
 
-@pytest.mark.parametrize("blocksize", [2048, 256])  # normal, and --monitor's smaller blocks
+@pytest.mark.parametrize("blocksize", [2048, 256])  # normal, and -monitor's smaller blocks
 def test_pause_and_resume_fade_without_clicks(recorder, tmp_path, blocksize):
     signal = sine(3)
     feed = Feeder(recorder, signal, blocksize)
