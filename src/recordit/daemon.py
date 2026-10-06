@@ -23,6 +23,7 @@ import socket
 import sys
 import threading
 import time
+from collections import deque
 
 import sounddevice as sd
 import soundfile as sf
@@ -71,14 +72,35 @@ class Recorder:
         session = self.session
         if session is not None and session["mode"] == "input":
             session["queue"].put(indata.copy())
+            self._record_level(session, indata)
 
     def secondary_callback(self, indata, frames, time_info, status):
         session = self.session
         if session is not None and session["mode"] in ("output", "device"):
             session["queue"].put(indata.copy())
+            self._record_level(session, indata)
             monitor_queue = session.get("monitor_queue")
             if monitor_queue is not None:
                 monitor_queue.put(indata[:, : self.monitor_channels].copy())
+
+    @staticmethod
+    def _record_level(session, indata):
+        # Peak magnitude of this block, for the client's live waveform.
+        # Taken from max/min rather than abs() since abs(-32768) overflows int16.
+        session["levels"].append(max(int(indata.max()), -int(indata.min())))
+
+    def drain_levels(self):
+        """Return the per-block peak levels captured since the last call."""
+        session = self.session
+        if session is None:
+            return None
+        levels = session["levels"]
+        drained = []
+        while True:
+            try:
+                drained.append(levels.popleft())
+            except IndexError:
+                return drained
 
     def open_input_stream(self):
         info = sd.query_devices(kind="input")
@@ -276,6 +298,7 @@ class Recorder:
                 "mode": mode,
                 "monitor_queue": monitor_queue,
                 "monitor_thread": monitor_thread,
+                "levels": deque(maxlen=1000),
             }
             self.last_activity = time.time()
             return True, None
@@ -329,6 +352,12 @@ def _handle_client(conn, recorder):
             else:
                 filename, duration = result
                 conn.sendall(json.dumps({"ok": True, "filename": filename, "duration": duration}).encode())
+        elif cmd == "levels":
+            levels = recorder.drain_levels()
+            if levels is None:
+                conn.sendall(json.dumps({"ok": False, "error": "Not recording"}).encode())
+            else:
+                conn.sendall(json.dumps({"ok": True, "levels": levels}).encode())
         elif cmd == "ping":
             conn.sendall(json.dumps({"ok": True}).encode())
         else:

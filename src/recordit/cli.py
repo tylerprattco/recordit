@@ -20,11 +20,14 @@ after the first use, starting a recording is near-instant.
 
 import argparse
 import json
+import math
+import shutil
 import socket
 import subprocess
 import sys
 import threading
 import time
+from collections import deque
 from pathlib import Path
 
 from .common import HOST, LOG_FILE, PORT_FILE, STATE_DIR
@@ -33,6 +36,11 @@ DAEMON_SPAWN_TIMEOUT = 20  # seconds to wait for a freshly spawned daemon to ope
 QUICK_CONNECT_TIMEOUT = 0.3  # seconds to detect whether a daemon is already running
 STOP_WORD = "stop"
 DELETE_WORD = "delete"
+
+WAVE_POLL_INTERVAL = 0.1  # seconds per waveform column
+WAVE_CHARS = "▁▂▃▄▅▆▇█"
+WAVE_FLOOR_DB = -60.0  # peaks at or below this show as the lowest bar
+FULL_SCALE = 32768  # int16 full scale
 
 
 def _normalize_wav_name(filename):
@@ -160,6 +168,53 @@ def _format_elapsed(seconds):
     return f"{minutes:02d}:{secs:02d}"
 
 
+def _fetch_levels():
+    sock = _try_connect(0.2)
+    if sock is None:
+        return None
+    try:
+        reply = _request(sock, {"cmd": "levels"}, recv_timeout=0.5)
+    except (OSError, ValueError):
+        return None
+    finally:
+        sock.close()
+    return reply.get("levels") if reply.get("ok") else None
+
+
+def _level_char(peak):
+    if peak <= 0:
+        return WAVE_CHARS[0]
+    db = 20 * math.log10(peak / FULL_SCALE)
+    fraction = (db - WAVE_FLOOR_DB) / -WAVE_FLOOR_DB
+    index = round(fraction * (len(WAVE_CHARS) - 1))
+    return WAVE_CHARS[min(max(index, 0), len(WAVE_CHARS) - 1)]
+
+
+def _run_waveform_display(start_time, stop_display, draw_lock):
+    """Draw the timer plus a scrolling peak waveform on the line above the
+    input line, leaving the cursor where the user types stop/delete.
+
+    Each column is the loudest block the daemon captured during one poll
+    interval, so the scroll speed doesn't depend on the stream blocksize.
+    """
+    columns = deque()
+    while True:
+        levels = _fetch_levels()
+        if levels:
+            columns.append(_level_char(max(levels)))
+        prefix = f"● recording  {_format_elapsed(time.time() - start_time)}  "
+        wave_width = max(shutil.get_terminal_size().columns - len(prefix) - 1, 0)
+        while len(columns) > wave_width:
+            columns.popleft()
+        with draw_lock:
+            if stop_display.is_set():
+                return
+            # Save cursor, move up to the waveform line, redraw, restore.
+            sys.stderr.write(f"\x1b7\x1b[1A\r{prefix}{''.join(columns)}\x1b[K\x1b8")
+            sys.stderr.flush()
+        stop_display.wait(WAVE_POLL_INTERVAL)
+
+
 def _run_progress_display(start_time, stop_display):
     while not stop_display.is_set():
         elapsed = _format_elapsed(time.time() - start_time)
@@ -191,7 +246,17 @@ def do_record(filename, mode, device_name=None, monitor=False):
     print(f"Type {STOP_WORD} and press Enter to stop (Ctrl+C also stops), or {DELETE_WORD} to stop and discard.")
 
     stop_display = threading.Event()
-    progress = threading.Thread(target=_run_progress_display, args=(time.time(), stop_display), daemon=True)
+    draw_lock = threading.Lock()
+    show_waveform = sys.stderr.isatty()
+    if show_waveform:
+        # Reserve a line above the input line for the waveform.
+        sys.stderr.write("\n")
+        sys.stderr.flush()
+        progress = threading.Thread(
+            target=_run_waveform_display, args=(time.time(), stop_display, draw_lock), daemon=True
+        )
+    else:
+        progress = threading.Thread(target=_run_progress_display, args=(time.time(), stop_display), daemon=True)
     progress.start()
 
     action = "stop"
@@ -200,14 +265,25 @@ def do_record(filename, mode, device_name=None, monitor=False):
             try:
                 line = input()
             except (EOFError, KeyboardInterrupt):
+                with draw_lock:
+                    stop_display.set()
                 print()
                 break
             stripped = line.strip()
-            if stripped == STOP_WORD:
+            if stripped in (STOP_WORD, DELETE_WORD):
+                # Stop drawing before anything else, so the final waveform
+                # stays in place above the entered command.
+                with draw_lock:
+                    stop_display.set()
+                if stripped == DELETE_WORD:
+                    action = "delete"
                 break
-            if stripped == DELETE_WORD:
-                action = "delete"
-                break
+            if show_waveform:
+                # Erase the unrecognized line so the input line stays
+                # directly below the waveform.
+                with draw_lock:
+                    sys.stderr.write("\x1b[1A\x1b[2K")
+                    sys.stderr.flush()
     finally:
         stop_display.set()
         progress.join(timeout=2)

@@ -42,7 +42,14 @@ Starts recording immediately from your default input device, saving to
 | `delete` + Enter  | Stop and discard the file       |
 | Ctrl+C / Ctrl+D   | Stop and save                   |
 
-A live `● recording MM:SS` timer shows while it's running.
+A live timer and scrolling waveform show while it's running, one column
+per 0.1s of audio, scaled from -60 dBFS (lowest bar) to full scale:
+
+```
+● recording  01:23  ▁▂▅▇█▆▃▂▁▁▂▄▆▇▅▃▂▁▂▃▅▇▆▄▂▁
+```
+
+The last waveform stays on screen after you stop.
 
 ### Recording system audio instead of the mic
 
