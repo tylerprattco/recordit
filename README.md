@@ -45,6 +45,19 @@ and it's named after the time it started, e.g.
 `recordit 2026-10-06 at 12.28.02 PM.wav`; this works with the flags below
 too (`recordit --output`).
 
+To get an MP3 instead, end the name in `.mp3`:
+
+```
+recordit take1.mp3
+```
+
+It records a WAV as usual (hidden, as `.take1.recording.wav`), then when you
+stop, converts it to a 320 kbps MP3 with [ffmpeg](https://ffmpeg.org) and
+deletes the WAV. This needs ffmpeg installed with MP3 support (e.g.
+`brew install ffmpeg` on macOS). If the conversion fails, the WAV is kept as
+`take1.wav` instead (or left under its hidden name if `take1.wav` already
+exists), so the recording is never lost.
+
 While it's recording, a live timer
 and scrolling waveform show, with clickable controls underneath:
 

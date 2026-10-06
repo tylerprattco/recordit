@@ -42,6 +42,7 @@ DAEMON_SPAWN_TIMEOUT = 20  # seconds to wait for a freshly spawned daemon to ope
 QUICK_CONNECT_TIMEOUT = 0.3  # seconds to detect whether a daemon is already running
 STOP_WORD = "stop"
 DELETE_WORD = "delete"
+MP3_BITRATE = "320k"
 
 WAVE_POLL_INTERVAL = 0.1  # seconds per waveform column
 WAVE_CHARS = "▁▂▃▄▅▆▇█"
@@ -65,10 +66,46 @@ def _default_filename():
     return f"recordit {now:%Y-%m-%d} at {hour}.{now:%M.%S %p}"
 
 
-def _normalize_wav_name(filename):
-    if not filename.lower().endswith(".wav"):
+def _normalize_filename(filename):
+    """Keep a .wav or .mp3 extension; otherwise record a WAV."""
+    if not filename.lower().endswith((".wav", ".mp3")):
         filename += ".wav"
     return filename
+
+
+def _temporary_wav_path(mp3_path):
+    """Where to record before converting to mp3_path: hidden, and named so
+    it can't overwrite the user's own take1.wav."""
+    return mp3_path.with_name(f".{mp3_path.stem}.recording.wav")
+
+
+def _convert_to_mp3(wav_path, mp3_path):
+    """Encode wav_path to a 320 kbps MP3 with ffmpeg; return None on success,
+    or an error message."""
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+        "-i", str(wav_path), "-codec:a", "libmp3lame", "-b:a", MP3_BITRATE, str(mp3_path),
+    ]  # fmt: skip
+    try:
+        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    except KeyboardInterrupt:
+        return "cancelled"
+    except OSError as exc:
+        return str(exc)
+    if result.returncode != 0:
+        lines = result.stderr.strip().splitlines()
+        return lines[0].strip() if lines else f"ffmpeg exited with status {result.returncode}"
+    return None
+
+
+def _keep_wav(wav_path, mp3_path):
+    """After a failed conversion, give the recording a visible name (take1.wav,
+    unless that's taken) and return where it is."""
+    visible = mp3_path.with_suffix(".wav")
+    if visible.exists():
+        return wav_path
+    wav_path.rename(visible)
+    return visible
 
 
 def _request(conn, payload, recv_timeout):
@@ -494,9 +531,17 @@ def do_record(filename, mode, device_name=None, monitor=False):
     if not filename:
         filename = _default_filename()
 
-    abspath = Path(_normalize_wav_name(filename)).expanduser().resolve()
+    target = Path(_normalize_filename(filename)).expanduser().resolve()
+    # MP3s are recorded as a WAV first, then converted with ffmpeg on stop.
+    to_mp3 = target.suffix.lower() == ".mp3"
+    if to_mp3 and shutil.which("ffmpeg") is None:
+        sys.exit(
+            "Recording an .mp3 needs ffmpeg, which wasn't found. Install it "
+            "(e.g. `brew install ffmpeg`), or record a .wav instead."
+        )
+    record_path = _temporary_wav_path(target) if to_mp3 else target
 
-    reply = _send_start(abspath, mode, device_name, monitor)
+    reply = _send_start(record_path, mode, device_name, monitor)
     if not reply.get("ok"):
         sys.exit(f"Failed to start recording: {reply.get('error')}")
 
@@ -513,10 +558,19 @@ def do_record(filename, mode, device_name=None, monitor=False):
         sys.exit(reply.get("error") or "Failed to stop recording.")
 
     if action == "delete":
-        Path(reply["filename"]).unlink(missing_ok=True)
-        print(f"Recording deleted: {reply['filename']}")
-    else:
-        print(f"Saved to {reply['filename']} ({reply['duration']:.1f}s)")
+        record_path.unlink(missing_ok=True)
+        print(f"Recording deleted: {target}")
+        return
+
+    if to_mp3:
+        print("Converting to MP3...", end="", flush=True)
+        error = _convert_to_mp3(record_path, target)
+        print("\r\x1b[K" if sys.stdout.isatty() else "", end="")
+        if error is not None:
+            kept = _keep_wav(record_path, target)
+            sys.exit(f"MP3 conversion failed ({error}). The recording was kept as {kept}")
+        record_path.unlink(missing_ok=True)
+    print(f"Saved to {target} ({reply['duration']:.1f}s)")
 
 
 def build_parser():
@@ -536,8 +590,9 @@ def build_parser():
     parser.add_argument(
         "name",
         nargs="?",
-        help="output filename; recording starts immediately "
-        '(default: a timestamp, e.g. "recordit 2026-10-06 at 12.28.02 PM.wav")',
+        help="output filename; recording starts immediately. Ending it in .mp3 "
+        "records a WAV, then converts it to a 320 kbps MP3 with ffmpeg when you "
+        'stop (default: a timestamp, e.g. "recordit 2026-10-06 at 12.28.02 PM.wav")',
     )
     parser.add_argument(
         "--output",

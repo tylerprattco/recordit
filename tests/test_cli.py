@@ -71,9 +71,19 @@ def test_default_filename(monkeypatch, now, expected):
     assert cli._default_filename() == expected
 
 
-@pytest.mark.parametrize("name, expected", [("take1", "take1.wav"), ("take1.wav", "take1.wav"), ("a.WAV", "a.WAV")])
-def test_normalize_wav_name(name, expected):
-    assert cli._normalize_wav_name(name) == expected
+@pytest.mark.parametrize(
+    "name, expected",
+    [
+        ("take1", "take1.wav"),
+        ("take1.wav", "take1.wav"),
+        ("a.WAV", "a.WAV"),
+        ("take1.mp3", "take1.mp3"),
+        ("Song.MP3", "Song.MP3"),
+        ("take.1", "take.1.wav"),
+    ],
+)
+def test_normalize_filename(name, expected):
+    assert cli._normalize_filename(name) == expected
 
 
 def test_level_char_is_linear_in_amplitude():

@@ -22,8 +22,9 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       # sounddevice's Linux wheels don't bundle PortAudio (the macOS and
-      # Windows ones do).
+      # Windows ones do). ffmpeg is for the .mp3 conversion tests, which
+      # skip where it isn't installed.
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libportaudio2
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 ffmpeg
       - run: pip install -e ".[test]"
       - run: pytest -v
