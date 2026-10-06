@@ -16,8 +16,10 @@ request instead reinitializes PortAudio in-process (forcing a fresh device
 scan) right here in the daemon, then reopens both streams.
 """
 
+import hmac
 import json
 import queue
+import secrets
 import signal
 import socket
 import sys
@@ -41,6 +43,8 @@ from .common import (
     SAMPLE_RATE,
     STATE_DIR,
     SUBTYPE,
+    read_port_file,
+    write_port_file,
 )
 
 NO_LOOPBACK_ERROR = (
@@ -366,13 +370,19 @@ class Recorder:
             self._close_streams()
 
 
-def _handle_client(conn, recorder):
+def _handle_client(conn, recorder, token):
     with conn:
         try:
             data = conn.recv(65536).decode()
             request = json.loads(data)
         except (ValueError, UnicodeDecodeError):
+            request = None
+        if not isinstance(request, dict):
             conn.sendall(json.dumps({"ok": False, "error": "bad request"}).encode())
+            return
+
+        if not hmac.compare_digest(str(request.get("token", "")), token):
+            conn.sendall(json.dumps({"ok": False, "error": "not authorized"}).encode())
             return
 
         cmd = request.get("cmd")
@@ -410,15 +420,12 @@ def main():
     STATE_DIR.mkdir(parents=True, exist_ok=True)
 
     if PORT_FILE.exists():
-        try:
-            stale_port = int(PORT_FILE.read_text().strip())
-        except ValueError:
-            stale_port = None
-        if stale_port is not None:
+        port_info = read_port_file()
+        if port_info is not None:
             probe = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             probe.settimeout(0.3)
             try:
-                probe.connect((HOST, stale_port))
+                probe.connect((HOST, port_info[0]))
                 probe.close()
                 sys.stderr.write("recordit daemon is already running\n")
                 sys.exit(1)
@@ -436,7 +443,8 @@ def main():
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.bind((HOST, 0))
     server.listen(8)
-    PORT_FILE.write_text(str(server.getsockname()[1]))
+    token = secrets.token_hex(16)
+    write_port_file(server.getsockname()[1], token)
 
     shutdown_event = threading.Event()
 
@@ -465,7 +473,7 @@ def main():
             conn, _ = server.accept()
         except OSError:
             break
-        threading.Thread(target=_handle_client, args=(conn, recorder), daemon=True).start()
+        threading.Thread(target=_handle_client, args=(conn, recorder, token), daemon=True).start()
 
     if not recorder.is_idle():
         recorder.stop()

@@ -36,7 +36,7 @@ from datetime import datetime
 from pathlib import Path
 
 from . import terminal
-from .common import HOST, LOG_FILE, PORT_FILE, STATE_DIR
+from .common import HOST, LOG_FILE, STATE_DIR, read_port_file
 
 DAEMON_SPAWN_TIMEOUT = 20  # seconds to wait for a freshly spawned daemon to open the device
 QUICK_CONNECT_TIMEOUT = 0.3  # seconds to detect whether a daemon is already running
@@ -71,17 +71,19 @@ def _normalize_wav_name(filename):
     return filename
 
 
-def _request(sock, payload, recv_timeout):
-    sock.sendall(json.dumps(payload).encode())
+def _request(conn, payload, recv_timeout):
+    sock, token = conn
+    sock.sendall(json.dumps(dict(payload, token=token)).encode())
     sock.settimeout(recv_timeout)
     return json.loads(sock.recv(65536).decode())
 
 
 def _try_connect(timeout):
-    try:
-        port = int(PORT_FILE.read_text().strip())
-    except (FileNotFoundError, ValueError):
+    """Connect to the running daemon; return (socket, token) or None."""
+    port_info = read_port_file()
+    if port_info is None:
         return None
+    port, token = port_info
     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     sock.settimeout(timeout)
     try:
@@ -89,7 +91,7 @@ def _try_connect(timeout):
     except OSError:
         sock.close()
         return None
-    return sock
+    return sock, token
 
 
 def _spawn_daemon():
@@ -105,16 +107,16 @@ def _spawn_daemon():
 
 
 def _connect_spawning_if_needed():
-    sock = _try_connect(QUICK_CONNECT_TIMEOUT)
-    if sock is not None:
-        return sock
+    conn = _try_connect(QUICK_CONNECT_TIMEOUT)
+    if conn is not None:
+        return conn
 
     _spawn_daemon()
     deadline = time.time() + DAEMON_SPAWN_TIMEOUT
     while time.time() < deadline:
-        sock = _try_connect(0.2)
-        if sock is not None:
-            return sock
+        conn = _try_connect(0.2)
+        if conn is not None:
+            return conn
         time.sleep(0.1)
 
     tail = ""
@@ -126,16 +128,16 @@ def _connect_spawning_if_needed():
 
 
 def _send_start(abspath, mode, device_name=None, monitor=False):
-    sock = _connect_spawning_if_needed()
+    conn = _connect_spawning_if_needed()
     payload = {"cmd": "start", "filename": str(abspath), "mode": mode, "monitor": monitor}
     if device_name is not None:
         payload["device_name"] = device_name
     try:
         # Generous timeout: covers the rare case where this call just spawned
         # the daemon and it's still finishing device setup.
-        return _request(sock, payload, recv_timeout=DAEMON_SPAWN_TIMEOUT)
+        return _request(conn, payload, recv_timeout=DAEMON_SPAWN_TIMEOUT)
     finally:
-        sock.close()
+        conn[0].close()
 
 
 def prompt_for_device():
@@ -176,13 +178,13 @@ def prompt_for_device():
 
 
 def _send_command(cmd):
-    sock = _try_connect(1)
-    if sock is None:
+    conn = _try_connect(1)
+    if conn is None:
         return {"ok": False, "error": "No active recording."}
     try:
-        return _request(sock, {"cmd": cmd}, recv_timeout=5)
+        return _request(conn, {"cmd": cmd}, recv_timeout=5)
     finally:
-        sock.close()
+        conn[0].close()
 
 
 def _format_elapsed(seconds):
@@ -191,15 +193,15 @@ def _format_elapsed(seconds):
 
 
 def _fetch_levels():
-    sock = _try_connect(0.2)
-    if sock is None:
+    conn = _try_connect(0.2)
+    if conn is None:
         return None
     try:
-        reply = _request(sock, {"cmd": "levels"}, recv_timeout=0.5)
+        reply = _request(conn, {"cmd": "levels"}, recv_timeout=0.5)
     except (OSError, ValueError):
         return None
     finally:
-        sock.close()
+        conn[0].close()
     return reply.get("levels") if reply.get("ok") else None
 
 
