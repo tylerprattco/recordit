@@ -60,10 +60,11 @@ per 0.1s of audio, scaled linearly by peak amplitude like a DAW waveform, and th
 last one stays on screen after you stop.
 
 Clicking uses your terminal's mouse reporting (supported by macOS Terminal,
-iTerm2 and most Linux terminals). While recording, the terminal sends clicks
-to recordit, so to select text hold Option (macOS) or Shift (most Linux
-terminals) while dragging. Where clicks can't be read (e.g. on Windows),
-type `stop` or `delete` and press Enter instead.
+iTerm2, Windows Terminal and most Linux terminals). While recording, the
+terminal sends clicks to recordit, so to select text hold Option (macOS) or
+Shift (Windows Terminal, most Linux terminals) while dragging. In a terminal
+without mouse reporting, such as the classic Windows console window, the
+buttons still show and the keyboard shortcuts work, but clicks do nothing.
 
 ### Recording system audio instead of the mic
 
@@ -132,6 +133,7 @@ Lists all flags plus the in-session `stop`/`delete` controls.
   you later run `stop`/`delete` from a different shell.
 - The background daemon auto-shuts-down after 30 minutes of inactivity,
   releasing the audio device.
-- Windows support (TCP-loopback IPC, detached process spawn) has been
-  written to be cross-platform but not yet tested on an actual Windows
-  machine — if you hit issues there, please report them.
+- Windows support (TCP-loopback IPC, detached process spawn, console
+  modes for the live controls) has been written to be cross-platform but
+  not yet tested on an actual Windows machine — if you hit issues there,
+  please report them.

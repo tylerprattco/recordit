@@ -14,8 +14,8 @@ Usage:
 
     While recording, click the pause/stop/delete buttons under the
     waveform, or press space to pause/resume, s to stop and save, or x to
-    stop and discard the file. (Where clicks aren't supported, e.g. on
-    Windows, type stop or delete and press Enter instead.)
+    stop and discard the file. (If input is piped rather than typed, use
+    stop or delete + Enter instead.)
 
 The file is saved into the directory you ran the command from. A small
 daemon keeps the audio devices open in the background across runs, so
@@ -24,11 +24,8 @@ after the first use, starting a recording is near-instant.
 
 import argparse
 import json
-import os
 import re
-import select
 import shutil
-import signal
 import socket
 import subprocess
 import sys
@@ -38,12 +35,7 @@ from collections import deque
 from datetime import datetime
 from pathlib import Path
 
-try:
-    import termios
-    import tty
-except ImportError:  # Windows: falls back to typed stop/delete
-    termios = tty = None
-
+from . import terminal
 from .common import HOST, LOG_FILE, PORT_FILE, STATE_DIR
 
 DAEMON_SPAWN_TIMEOUT = 20  # seconds to wait for a freshly spawned daemon to open the device
@@ -263,6 +255,7 @@ class _ControlPanel:
         self.run_started = time.time()
         self.button_row = None  # screen row, learned from a cursor position report
         self.position_wanted = True
+        self.terminal_size = None
         self.columns = deque()
 
     def elapsed(self):
@@ -291,10 +284,16 @@ class _ControlPanel:
         prefix = f"{label:<11}  {_format_elapsed(self.elapsed())}  "
         wave = _waveform_text(self.columns, prefix)
         buttons, _ = _button_layout(self.paused)
+        size = shutil.get_terminal_size()
         with self.lock:
             if self.stopped.is_set():
                 return
             frame = f"\x1b[1A\r{prefix}{wave}\x1b[K\x1b[1B\r{buttons}\x1b[K"
+            if size != self.terminal_size:
+                # A resize can move the button row (and there's no resize
+                # signal on Windows), so re-learn its position.
+                self.terminal_size = size
+                self.position_wanted = True
             if self.position_wanted:
                 # Ask the terminal where the button row is; the reply
                 # arrives on stdin and is handled by _read_controls.
@@ -361,18 +360,16 @@ def _handle_event(panel, kind, value):
     return None
 
 
-def _read_controls(panel):
-    fd = sys.stdin.fileno()
+def _read_controls(panel, raw_input):
     buf = b""
     while True:
-        ready, _, _ = select.select([fd], [], [], 0.2)
-        if not ready:
+        data = raw_input.read(0.2)
+        if data is None:
+            return "stop"
+        if not data:
             if buf == b"\x1b":
                 buf = b""  # a lone Escape keypress, not the start of a sequence
             continue
-        data = os.read(fd, 1024)
-        if not data:
-            return "stop"
         buf += data
         while buf:
             parsed = _parse_input(buf)
@@ -387,35 +384,25 @@ def _read_controls(panel):
 def _run_control_panel():
     """Show the clickable controls until the user stops; return the action."""
     panel = _ControlPanel()
-    fd = sys.stdin.fileno()
-    saved_tty = termios.tcgetattr(fd)
-    saved_winch = signal.getsignal(signal.SIGWINCH)
-
-    def on_resize(*_args):
-        panel.position_wanted = True
-
-    tty.setcbreak(fd)
-    signal.signal(signal.SIGWINCH, on_resize)
-    # Reserve the waveform line; enable SGR mouse reporting; hide the cursor.
-    sys.stderr.write(f"\n{MOUSE_ON}\x1b[?25l")
-    sys.stderr.flush()
-    display = threading.Thread(target=panel.run_display, daemon=True)
-    display.start()
-    try:
-        try:
-            return _read_controls(panel)
-        except KeyboardInterrupt:
-            return "stop"
-    finally:
-        with panel.lock:
-            panel.stopped.set()
-        display.join(timeout=2)
-        # Clear the button row (the final waveform stays above it) and
-        # restore the terminal.
-        sys.stderr.write(f"\r\x1b[K{MOUSE_OFF}\x1b[?25h")
+    with terminal.RawInput() as raw_input:
+        # Reserve the waveform line; enable SGR mouse reporting; hide the cursor.
+        sys.stderr.write(f"\n{MOUSE_ON}\x1b[?25l")
         sys.stderr.flush()
-        signal.signal(signal.SIGWINCH, saved_winch)
-        termios.tcsetattr(fd, termios.TCSADRAIN, saved_tty)
+        display = threading.Thread(target=panel.run_display, daemon=True)
+        display.start()
+        try:
+            try:
+                return _read_controls(panel, raw_input)
+            except KeyboardInterrupt:
+                return "stop"
+        finally:
+            with panel.lock:
+                panel.stopped.set()
+            display.join(timeout=2)
+            # Clear the button row (the final waveform stays above it) and
+            # restore the terminal.
+            sys.stderr.write(f"\r\x1b[K{MOUSE_OFF}\x1b[?25h")
+            sys.stderr.flush()
 
 
 def _run_waveform_display(start_time, stop_display, draw_lock):
@@ -445,12 +432,11 @@ def _run_progress_display(start_time, stop_display):
     sys.stderr.flush()
 
 
-def _run_typed_controls():
-    """Fallback when clicks can't be read (e.g. Windows): wait for a typed
-    stop/delete; return the action."""
+def _run_typed_controls(show_waveform):
+    """Fallback when keys/clicks can't be read one at a time (e.g. input is
+    piped): wait for a typed stop/delete; return the action."""
     stop_display = threading.Event()
     draw_lock = threading.Lock()
-    show_waveform = sys.stderr.isatty()
     if show_waveform:
         # Reserve a line above the input line for the waveform.
         sys.stderr.write("\n")
@@ -489,10 +475,6 @@ def _run_typed_controls():
         progress.join(timeout=2)
 
 
-def _controls_clickable():
-    return termios is not None and sys.stdin.isatty() and sys.stderr.isatty()
-
-
 def do_record(filename, mode, device_name=None, monitor=False):
     if not filename:
         filename = _default_filename()
@@ -503,12 +485,13 @@ def do_record(filename, mode, device_name=None, monitor=False):
     if not reply.get("ok"):
         sys.exit(f"Failed to start recording: {reply.get('error')}")
 
-    if _controls_clickable():
+    escapes_work = sys.stderr.isatty() and terminal.enable_vt_output()
+    if escapes_work and terminal.raw_input_supported():
         action = _run_control_panel()
     else:
         # Without clickable buttons, nothing else on screen says how to stop.
         print(f"Type {STOP_WORD} and press Enter to stop (Ctrl+C also stops), or {DELETE_WORD} to stop and discard.")
-        action = _run_typed_controls()
+        action = _run_typed_controls(show_waveform=escapes_work)
 
     reply = _send_command("stop")
     if not reply.get("ok"):
@@ -531,8 +514,7 @@ def build_parser():
             "  s           stop and save\n"
             "  x           stop and discard the file\n"
             "  Ctrl+C      also stops and saves\n"
-            f"Where clicks aren't supported (e.g. Windows), type {STOP_WORD} or {DELETE_WORD}\n"
-            "and press Enter instead.\n"
+            f"If input is piped rather than typed, use {STOP_WORD} or {DELETE_WORD} + Enter instead.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
