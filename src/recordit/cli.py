@@ -254,6 +254,7 @@ class _ControlPanel:
         self.recorded_before_run = 0.0
         self.run_started = time.time()
         self.button_row = None  # screen row, learned from a cursor position report
+        self.pressed_button = None
         self.position_wanted = True
         self.terminal_size = None
         self.columns = deque()
@@ -349,12 +350,24 @@ def _handle_event(panel, kind, value):
             return "delete"
     elif kind == "mouse":
         button, col, row, final = value
-        if final == b"M" and int(button) == 0:  # left button press
-            action = panel.button_at(int(col), int(row))
-            if action == "pause":
-                _toggle_pause(panel)
-            elif action is not None:
-                return action
+        if int(button) != 0:  # left button only
+            return None
+        target = panel.button_at(int(col), int(row))
+        if final == b"M":  # press
+            panel.pressed_button = target
+            return None
+        # Act on release, like a normal button: it can be cancelled by
+        # dragging off before letting go, and the release is consumed here
+        # rather than reaching the terminal after mouse reporting is turned
+        # off (iTerm2 treats a stray release as a click that selects the
+        # whole command's output).
+        pressed, panel.pressed_button = panel.pressed_button, None
+        if target is None or target != pressed:
+            return None
+        if target == "pause":
+            _toggle_pause(panel)
+        else:
+            return target
     elif kind == "position":
         panel.button_row = int(value[0])
     return None
