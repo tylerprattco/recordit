@@ -1,6 +1,8 @@
 """recordit - lightning-fast background WAV recorder.
 
 Usage:
+    recordit                  # record to a timestamped file, e.g.
+                               # "recordit 2026-10-06 at 12.28.02 PM.wav"
     recordit take1            # record from the default input device
     recordit take1 --output   # record the system's current output instead
                                # (requires a loopback-capable output device,
@@ -22,7 +24,6 @@ after the first use, starting a recording is near-instant.
 
 import argparse
 import json
-import math
 import os
 import re
 import select
@@ -34,6 +35,7 @@ import sys
 import threading
 import time
 from collections import deque
+from datetime import datetime
 from pathlib import Path
 
 try:
@@ -51,7 +53,6 @@ DELETE_WORD = "delete"
 
 WAVE_POLL_INTERVAL = 0.1  # seconds per waveform column
 WAVE_CHARS = "▁▂▃▄▅▆▇█"
-WAVE_FLOOR_DB = -60.0  # peaks at or below this show as the lowest bar
 FULL_SCALE = 32768  # int16 full scale
 
 PAUSE_ICON = "⏸"
@@ -61,6 +62,15 @@ DELETE_ICON = "✕"
 # xterm mouse reporting: button press/release events, SGR-encoded coordinates.
 MOUSE_ON = "\x1b[?1000h\x1b[?1006h"
 MOUSE_OFF = "\x1b[?1006l\x1b[?1000l"
+
+
+def _default_filename():
+    """e.g. "recordit 2026-10-06 at 12.28.02 PM", in the style of macOS
+    screenshots. Built by hand since strftime's unpadded-hour flag isn't
+    portable to Windows."""
+    now = datetime.now()
+    hour = now.hour % 12 or 12
+    return f"recordit {now:%Y-%m-%d} at {hour}.{now:%M.%S %p}"
 
 
 def _normalize_wav_name(filename):
@@ -202,11 +212,9 @@ def _fetch_levels():
 
 
 def _level_char(peak):
-    if peak <= 0:
-        return WAVE_CHARS[0]
-    db = 20 * math.log10(peak / FULL_SCALE)
-    fraction = (db - WAVE_FLOOR_DB) / -WAVE_FLOOR_DB
-    index = round(fraction * (len(WAVE_CHARS) - 1))
+    # Linear in amplitude, like a DAW waveform, so dynamics read clearly:
+    # -20 dBFS is a low bar and only peaks near full scale reach the top.
+    index = round(peak / FULL_SCALE * (len(WAVE_CHARS) - 1))
     return WAVE_CHARS[min(max(index, 0), len(WAVE_CHARS) - 1)]
 
 
@@ -487,7 +495,7 @@ def _controls_clickable():
 
 def do_record(filename, mode, device_name=None, monitor=False):
     if not filename:
-        sys.exit("recordit requires a filename, e.g. `recordit take1`")
+        filename = _default_filename()
 
     abspath = Path(_normalize_wav_name(filename)).expanduser().resolve()
 
@@ -528,7 +536,12 @@ def build_parser():
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("name", nargs="?", help="output filename; recording starts immediately")
+    parser.add_argument(
+        "name",
+        nargs="?",
+        help="output filename; recording starts immediately "
+        '(default: a timestamp, e.g. "recordit 2026-10-06 at 12.28.02 PM.wav")',
+    )
     parser.add_argument(
         "--output",
         action="store_true",
@@ -552,10 +565,6 @@ def build_parser():
 def main():
     parser = build_parser()
     args = parser.parse_args()
-
-    if not args.name:
-        parser.print_help()
-        sys.exit(1)
 
     if args.output and args.device:
         sys.exit("Use either --output or --device, not both.")

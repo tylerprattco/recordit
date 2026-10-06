@@ -22,4 +22,8 @@ BLOCKSIZE = 2048  # frames per callback; kept modest to stay cheap on CPU
 MONITOR_BLOCKSIZE = 256
 MONITOR_LATENCY = "low"
 
+# Length of the fade applied to the recording at each pause and resume, so
+# the splice doesn't click.
+PAUSE_FADE_FRAMES = SAMPLE_RATE // 100  # 10 ms
+
 IDLE_TIMEOUT = 30 * 60  # seconds of inactivity before the daemon shuts itself down

@@ -34,7 +34,12 @@ recordit take1
 ```
 
 Starts recording immediately from your default input device, saving to
-`take1.wav` in your current directory. While it's recording, a live timer
+`take1.wav` in your current directory. Leave out the name (just `recordit`)
+and it's named after the time it started, e.g.
+`recordit 2026-10-06 at 12.28.02 PM.wav`; this works with the flags below
+too (`recordit --output`).
+
+While it's recording, a live timer
 and scrolling waveform show, with clickable controls underneath:
 
 ```
@@ -51,7 +56,7 @@ and scrolling waveform show, with clickable controls underneath:
 
 Paused time isn't recorded, and the timer and waveform freeze while paused
 (with `--monitor`, you still hear the source). The waveform has one column
-per 0.1s of audio, scaled from -60 dBFS (lowest bar) to full scale, and the
+per 0.1s of audio, scaled linearly by peak amplitude like a DAW waveform, and the
 last one stays on screen after you stop.
 
 Clicking uses your terminal's mouse reporting (supported by macOS Terminal,

@@ -25,6 +25,7 @@ import threading
 import time
 from collections import deque
 
+import numpy as np
 import sounddevice as sd
 import soundfile as sf
 
@@ -35,6 +36,7 @@ from .common import (
     IDLE_TIMEOUT,
     MONITOR_BLOCKSIZE,
     MONITOR_LATENCY,
+    PAUSE_FADE_FRAMES,
     PORT_FILE,
     SAMPLE_RATE,
     STATE_DIR,
@@ -70,26 +72,48 @@ class Recorder:
 
     def input_callback(self, indata, frames, time_info, status):
         session = self.session
-        if session is not None and session["mode"] == "input" and not session["paused"]:
-            session["queue"].put(indata.copy())
-            self._record_level(session, indata)
+        if session is not None and session["mode"] == "input":
+            self._record_block(session, indata)
 
     def secondary_callback(self, indata, frames, time_info, status):
         session = self.session
         if session is not None and session["mode"] in ("output", "device"):
             # Monitoring continues while paused; only the recording stops.
-            if not session["paused"]:
-                session["queue"].put(indata.copy())
-                self._record_level(session, indata)
+            self._record_block(session, indata)
             monitor_queue = session.get("monitor_queue")
             if monitor_queue is not None:
                 monitor_queue.put(indata[:, : self.monitor_channels].copy())
 
-    @staticmethod
-    def _record_level(session, indata):
+    def _record_block(self, session, indata):
+        block = self._apply_pause_fade(session, indata)
+        if block is None or len(block) == 0:
+            return
+        session["queue"].put(block)
         # Peak magnitude of this block, for the client's live waveform.
         # Taken from max/min rather than abs() since abs(-32768) overflows int16.
-        session["levels"].append(max(int(indata.max()), -int(indata.min())))
+        session["levels"].append(max(int(block.max()), -int(block.min())))
+
+    @staticmethod
+    def _apply_pause_fade(session, indata):
+        """Return the part of this block to record, or None while paused.
+
+        Pausing and resuming ramp the recording's gain to 0 or 1 over
+        PAUSE_FADE_FRAMES instead of cutting in or out abruptly. The gain is
+        ramped from wherever it currently is, so a resume during a fade-out
+        (or vice versa) stays smooth too.
+        """
+        gain, target = session["gain"], session["gain_target"]
+        if gain == target:
+            return indata.copy() if target else None
+        step = 1.0 / PAUSE_FADE_FRAMES if target > gain else -1.0 / PAUSE_FADE_FRAMES
+        ramp = np.clip(gain + step * np.arange(1, len(indata) + 1), 0.0, 1.0)
+        session["gain"] = float(ramp[-1])
+        if target == 0.0:
+            # Keep only the faded-out portion; once the gain hits 0 the
+            # rest of the block falls in the paused stretch.
+            audible = int(np.count_nonzero(ramp))
+            indata, ramp = indata[:audible], ramp[:audible]
+        return (indata * ramp[:, None]).astype(DTYPE)
 
     def drain_levels(self):
         """Return the per-block peak levels captured since the last call."""
@@ -302,7 +326,8 @@ class Recorder:
                 "monitor_queue": monitor_queue,
                 "monitor_thread": monitor_thread,
                 "levels": deque(maxlen=1000),
-                "paused": False,
+                "gain": 1.0,
+                "gain_target": 1.0,  # 0.0 while paused
                 "frames_written": frames_written,
             }
             self.last_activity = time.time()
@@ -330,7 +355,7 @@ class Recorder:
         with self.lock:
             if self.session is None:
                 return "Not recording"
-            self.session["paused"] = paused
+            self.session["gain_target"] = 0.0 if paused else 1.0
             return None
 
     def is_idle(self):
