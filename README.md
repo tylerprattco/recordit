@@ -1,6 +1,6 @@
 # recordit
 
-A lightweight terminal WAV recorder. Records 44.1kHz/16-bit audio from your
+recordit is a lightweight terminal WAV recorder. It records audio from your
 default input device, your system's current output (via a loopback device),
 or a specific device you pick — all from a single command that's fast enough
 to use mid-session alongside CPU/RAM-heavy audio software (DAWs, virtual
