@@ -66,46 +66,6 @@ Each flag has a single-dash short form:
 For example, `recordit take1 -o -m` is the same as
 `recordit take1 --output --monitor`.
 
-To get an MP3 instead, end the name in `.mp3`:
-
-```
-recordit take1.mp3
-```
-
-It records a WAV as usual (hidden, as `.take1.recording.wav`), then when you
-stop, converts it to a 320 kbps MP3 with [ffmpeg](https://ffmpeg.org) and
-deletes the WAV. This needs ffmpeg installed with MP3 support (e.g.
-`brew install ffmpeg` on macOS). If the conversion fails, the WAV is kept as
-`take1.wav` instead (or left under its hidden name if `take1.wav` already
-exists), so the recording is never lost.
-
-While it's recording, a live timer
-and scrolling waveform show, with clickable controls underneath:
-
-```
-● recording  01:23  ▁▂▅▇█▆▃▂▁▁▂▄▆▇▅▃▂▁▂▃▅▇▆▄▂▁
-  [ ⏸ ]   [ ⏹ ]   [ ✕ ]
-```
-
-| Click / key          | Effect                                     |
-|----------------------|--------------------------------------------|
-| `⏸` / space or `p`   | Pause (becomes `▶`; click again to resume) |
-| `⏹` / `s` or Shift+S | Stop and save                              |
-| `✕` / `x` or Shift+X | Stop and discard the file                  |
-| Ctrl+C               | Stop and save                              |
-
-Paused time isn't recorded, and the timer and waveform freeze while paused
-(with `--monitor`, you still hear the source). The waveform has one column
-per 0.1s of audio, scaled linearly by peak amplitude like a DAW waveform, and the
-last one stays on screen after you stop.
-
-Clicking uses your terminal's mouse reporting (supported by macOS Terminal,
-iTerm2, Windows Terminal and most Linux terminals). While recording, the
-terminal sends clicks to recordit, so to select text hold Option (macOS) or
-Shift (Windows Terminal, most Linux terminals) while dragging. In a terminal
-without mouse reporting, such as the classic Windows console window, the
-buttons still show and the keyboard shortcuts work, but clicks do nothing.
-
 ### Recording system audio instead of the mic
 
 ```
@@ -177,6 +137,49 @@ recordit --help
 ```
 
 Lists all flags plus the in-session recording controls.
+
+
+
+To get an MP3 instead, end the name in `.mp3`:
+
+```
+recordit take1.mp3
+```
+
+It records a WAV as usual (hidden, as `.take1.recording.wav`), then when you
+stop, converts it to a 320 kbps MP3 with [ffmpeg](https://ffmpeg.org) and
+deletes the WAV. This needs ffmpeg installed with MP3 support (e.g.
+`brew install ffmpeg` on macOS). If the conversion fails, the WAV is kept as
+`take1.wav` instead (or left under its hidden name if `take1.wav` already
+exists), so the recording is never lost.
+
+While it's recording, a live timer
+and scrolling waveform show, with clickable controls underneath:
+
+```
+● recording  01:23  ▁▂▅▇█▆▃▂▁▁▂▄▆▇▅▃▂▁▂▃▅▇▆▄▂▁
+  [ ⏸ ]   [ ⏹ ]   [ ✕ ]
+```
+
+| Click / key          | Effect                                     |
+|----------------------|--------------------------------------------|
+| `⏸` / space or `p`   | Pause (becomes `▶`; click again to resume) |
+| `⏹` / `s` or Shift+S | Stop and save                              |
+| `✕` / `x` or Shift+X | Stop and discard the file                  |
+| Ctrl+C               | Stop and save                              |
+
+Paused time isn't recorded, and the timer and waveform freeze while paused
+(with `--monitor`, you still hear the source). The waveform has one column
+per 0.1s of audio, scaled linearly by peak amplitude like a DAW waveform, and the
+last one stays on screen after you stop.
+
+Clicking uses your terminal's mouse reporting (supported by macOS Terminal,
+iTerm2, Windows Terminal and most Linux terminals). While recording, the
+terminal sends clicks to recordit, so to select text hold Option (macOS) or
+Shift (Windows Terminal, most Linux terminals) while dragging. In a terminal
+without mouse reporting, such as the classic Windows console window, the
+buttons still show and the keyboard shortcuts work, but clicks do nothing.
+
 
 ## Notes
 
