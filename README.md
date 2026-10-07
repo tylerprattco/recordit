@@ -12,7 +12,8 @@ instead of paying audio device setup costs every time.
 
 ## Demo
 
-https://github.com/user-attachments/assets/b97378ed-c355-48b5-bed8-0c4237c0ace1
+<img width="1542" height="924" alt="recordit" src="https://github.com/user-attachments/assets/572a887d-2065-4360-9f60-5cf380ae9356" />
+
 
 
 ## Requirements
