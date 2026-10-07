@@ -10,6 +10,12 @@ A small background daemon keeps the audio device open and idling between
 recordings, so after the first use, starting a new recording is near-instant
 instead of paying audio device setup costs every time.
 
+## Demo
+
+<video src="https://github.com/tylerprattco/recordit/raw/main/resources/recordit.webm" controls muted width="100%"></video>
+
+[Watch the demo](resources/recordit.webm) if the video doesn't play above.
+
 ## Requirements
 
 - Python 3.8+
