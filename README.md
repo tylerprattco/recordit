@@ -12,11 +12,8 @@ instead of paying audio device setup costs every time.
 
 ## Demo
 
-https://github.com/user-attachments/assets/9031b51b-f610-4b5b-92db-63fe5cdff1c5
+https://github.com/user-attachments/assets/b97378ed-c355-48b5-bed8-0c4237c0ace1
 
-
-
-[Watch the demo](resources/recordit.webm) if the video doesn't play above.
 
 ## Requirements
 
