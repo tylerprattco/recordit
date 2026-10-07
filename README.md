@@ -52,6 +52,20 @@ and it's named after the time it started, e.g.
 `recordit 2026-10-06 at 12.28.02 PM.wav`; this works with the flags below
 too (`recordit --output`).
 
+### Short flags
+
+Each flag has a single-dash short form:
+
+| Flag         | Short |
+|--------------|-------|
+| `--output`   | `-o`  |
+| `--device`   | `-d`  |
+| `--monitor`  | `-m`  |
+| `--showfile` | `-s`  |
+
+For example, `recordit take1 -o -m` is the same as
+`recordit take1 --output --monitor`.
+
 To get an MP3 instead, end the name in `.mp3`:
 
 ```
@@ -155,19 +169,6 @@ Once the recording is saved, opens your default file browser on its folder
 (Finder selects the file on macOS, Explorer on Windows; elsewhere the folder
 is opened with `xdg-open`). Nothing opens if you discard the recording.
 
-### Short flags
-
-Each flag has a single-dash short form:
-
-| Flag         | Short |
-|--------------|-------|
-| `--output`   | `-o`  |
-| `--device`   | `-d`  |
-| `--monitor`  | `-m`  |
-| `--showfile` | `-s`  |
-
-For example, `recordit take1 -o -m` is the same as
-`recordit take1 --output --monitor`.
 
 ### Help
 
