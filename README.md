@@ -12,7 +12,9 @@ instead of paying audio device setup costs every time.
 
 ## Demo
 
-<video src="https://github.com/tylerprattco/recordit/raw/main/resources/recordit.webm" controls muted width="100%"></video>
+https://github.com/user-attachments/assets/9031b51b-f610-4b5b-92db-63fe5cdff1c5
+
+
 
 [Watch the demo](resources/recordit.webm) if the video doesn't play above.
 
